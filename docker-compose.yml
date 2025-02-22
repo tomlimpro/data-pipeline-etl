@@ -1,4 +1,5 @@
 services:
+ # Service PostgreSQL
  kc_database:
   container_name: kc_database
   image: postgres
@@ -8,3 +9,81 @@ services:
    POSTGRES_DB: kc_db
   ports:
    - "5432:5432"
+  networks: 
+   - airflow_network
+  volumes:
+   - postgres_data:/var/lib/postgresql/data
+
+ # Redis pour CeleryWorker
+ redis: 
+  container_name: airflow_redis
+  image: redis
+  restart: always
+  ports: 
+   - "6379:6379"
+  networks:
+   - airflow_network
+ 
+ # Service Apache Airflow (webserver)
+ airflow-webserver:
+  container_name: airflow-webserver
+  image: apache/airflow:2.4.3
+  environment:
+   AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+   AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://admin:admin@kc_database/kc_db
+   AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://admin:admin@kc_database/kc_db
+   AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+  ports:
+   - "8080:8080"
+  depends_on:
+   - kc_database
+   - redis
+  networks:
+   - airflow_network
+  volumes:
+   - ./dags:/opt/airflow/dags   # Monter les DAGs locaux dans le conteneur Airflow
+  command: webserver
+  entrypoint: ["/bin/bash", "-c", "airflow db init && airflow webserver"]
+
+ # Service Apache Airflow (Scheduler)
+ airflow-scheduler:
+  container_name: airflow-scheduler
+  image: apache/airflow:2.4.3
+  environment:
+   AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+   AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://admin:admin@kc_database/kc_db
+   AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://admin:admin@kc_database/kc_db
+   AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+  depends_on:
+   - airflow-webserver
+  networks:
+   - airflow_network
+  volumes:
+   - ./dags:/otp/airflow/dags
+  command: scheduler
+ 
+ # Service Apache Airflow (Worker)
+ apache-worker:
+  container_name: apache-worker
+  image: apache/airflow:2.4.3
+  environment:
+   AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+   AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://admin:admin@kc_database/kc_db
+   AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://admin:admin@kc_database/kc_db
+   AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+  depends_on:
+   - airflow-scheduler
+  networks:
+   - airflow_network
+  volumes:
+   - ./dags:/otp/airflow/dags
+  command: celery worker
+
+ # Volume pour la persistance des donnes PostgreSQL
+volumes: 
+ postgres_data:
+
+ # Reseau pour isoler les services
+networks:
+ airflow_network:
+  driver: bridge 
