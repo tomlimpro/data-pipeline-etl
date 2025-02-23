@@ -59,7 +59,7 @@ services:
   networks:
    - airflow_network
   volumes:
-   - ./dags:/otp/airflow/dags
+   - ./dags:/opt/airflow/dags
   command: scheduler
  
  # Service Apache Airflow (Worker)
@@ -76,7 +76,7 @@ services:
   networks:
    - airflow_network
   volumes:
-   - ./dags:/otp/airflow/dags
+   - ./dags:/opt/airflow/dags
   command: celery worker
 
  # Volume pour la persistance des donnes PostgreSQL
